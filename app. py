@@ -1,0 +1,162 @@
+import streamlit as st
+import pandas as pd
+from datetime import datetime
+import json
+import os
+import urllib.parse
+
+# 1. إعدادات الصفحة
+st.set_page_config(page_title="مساعدي اليومي", page_icon="📝", layout="centered")
+
+# تحسين مظهر الواجهة للغة العربية (RTL)
+st.markdown("""
+    <style>
+    body, div, input, textarea, button {
+        direction: RTL;
+        text-align: right;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+    .stButton>button {
+        width: 100%;
+        background-color: #25D366;
+        color: white;
+        font-weight: bold;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+# 2. إدارة قواعد البيانات المحترفة (تخزين البيانات بملفات JSON)
+EXPENSES_FILE = "expenses.json"
+DIARY_FILE = "diary.json"
+
+def load_data(file_path):
+    if os.path.exists(file_path):
+        with open(file_path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return []
+
+def save_data(file_path, data):
+    with open(file_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=4)
+
+# 3. قاعدة بيانات الآيات القرآنية اليومية
+QURAN_VERSES = [
+    {"verse": "وَقُل رَّبِّ زِدْنِي عِلْمًا", "surah": "طه", "number": 114},
+    {"verse": "إِنَّ مَعَ الْعُسْرِ يُسْرًا", "surah": "الشرح", "number": 6},
+    {"verse": "وَتَوَكَّلْ عَلَى الْحَيِّ الَّذِي لَا يَمُوتُ", "surah": "الفرقان", "number": 58},
+    {"verse": "وَقُولُوا لِلنَّاسِ حُسْنًا", "surah": "البقرة", "number": 83},
+    {"verse": "فَاذْكُرُونِي أَذْكُرْكُمْ وَاشْكُرُوا لِي وَلَا تَكْفُرُونِ", "surah": "البقرة", "number": 152}
+]
+
+st.title("🌟 تطبيق إدارة اليوميات والمهام")
+
+# شريط التنقل العلوي
+tab1, tab2, tab3, tab4 = st.tabs(["💰 المصاريف", "📖 اليوميات", "📲 رسالة الواتساب", "🎯 المهام والملاحظات"])
+
+# ----------------------------------------------------
+# التبويب الأول: إدارة المصاريف
+# ----------------------------------------------------
+with tab1:
+    st.header("تسجيل المصاريف اليومية")
+    
+    with st.form("expense_form", clear_on_submit=True):
+        amount = st.number_input("المبلغ", min_value=0.0, step=0.5)
+        category = st.selectbox("الفئة", ["طعام وشراب", "مواصلات", "تسوق", "فواتير", "عام"])
+        details = st.text_input("تفاصيل المصروف")
+        submit_expense = st.form_submit_button("حفظ المصروف")
+        
+        if submit_expense and amount > 0:
+            expenses = load_data(EXPENSES_FILE)
+            expenses.append({
+                "date": str(datetime.now().strftime("%Y-%m-%d")),
+                "amount": amount,
+                "category": category,
+                "details": details
+            })
+            save_data(EXPENSES_FILE, expenses)
+            st.success("تم تسجيل المصروف بنجاح!")
+
+    st.subheader("سجل المصاريف")
+    expenses_data = load_data(EXPENSES_FILE)
+    if expenses_data:
+        df_exp = pd.DataFrame(expenses_data)
+        st.dataframe(df_exp, use_container_width=True)
+        st.info(f"إجمالي المصاريف: {df_exp['amount'].sum()} ")
+    else:
+        st.write("لا توجد مصاريف مسجلة حتى الآن.")
+
+# ----------------------------------------------------
+# التبويب الثاني: اليوميات التأملية
+# ----------------------------------------------------
+with tab2:
+    st.header("اليوميات التأملية")
+    
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    st.write(f"تاريخ اليوم: **{today_str}**")
+    
+    diary_text = st.text_area("أكتب تأملاتك وأفكارك أو مهامك اليومية هنا...", height=250)
+    
+    if st.button("حفظ اليوميات"):
+        if diary_text.strip():
+            diaries = load_data(DIARY_FILE)
+            diaries.append({
+                "date": today_str,
+                "content": diary_text
+            })
+            save_data(DIARY_FILE, diaries)
+            st.success("تم حفظ اليوميات بنجاح!")
+        else:
+            st.warning("يرجى كتابة نص قبل الحفظ.")
+
+# ----------------------------------------------------
+# التبويب الثالث: رسالة الواتساب اليومية (كل يوم آية)
+# ----------------------------------------------------
+with tab3:
+    st.header("كل يوم آية - إرسال للأصدقاء")
+    
+    # اختيار آية بناءً على اليوم
+    day_of_year = datetime.now().timetuple().tm_yday
+    selected_quran = QURAN_VERSES[day_of_year % len(QURAN_VERSES)]
+    
+    msg_text = f"صباح الخير 🌸\n\n*كل يوم آية*\n\nقال تعالى: 《 {selected_quran['verse']} 》\n\n[سورة {selected_quran['surah']} - الآية {selected_quran['number']}]"
+    
+    st.subheader("الرسالة المجهزة لليوم:")
+    st.info(msg_text)
+    
+    phone_number = st.text_input("أدخل رقم صديقك (مع رمز الدولة بدون + مثل: 2010xxxxxxx):")
+    
+    if phone_number:
+        encoded_msg = urllib.parse.quote(msg_text)
+        whatsapp_url = f"https://api.whatsapp.com/send?phone={phone_number}&text={encoded_msg}"
+        
+        st.markdown(f'<a href="{whatsapp_url}" target="_blank" style="text-decoration:none;"><button style="width:100%; padding:10px; background-color:#25D366; color:white; border:none; border-radius:5px; font-weight:bold;">إرسال عبر الواتساب 📲</button></a>', unsafe_allow_html=True)
+
+# ----------------------------------------------------
+# التبويب الرابع: استخراج المهام وتذكرها
+# ----------------------------------------------------
+with tab4:
+    st.header("تذكير المهام من اليوميات")
+    
+    diaries = load_data(DIARY_FILE)
+    if diaries:
+        st.subheader("المهام والنقاط المكتوبة في اليوميات:")
+        keywords = ["يجب", "مطلوب", "مهمة", "تذكير", "أسبوع", "شهر", "التزام", "ميعاد"]
+        
+        found_tasks = []
+        for entry in diaries:
+            lines = entry["content"].split("\n")
+            for line in lines:
+                if any(kw in line for kw in keywords):
+                    found_tasks.append({"التاريخ": entry["date"], "المهام المستخرجة": line})
+        
+        if found_tasks:
+            st.table(found_tasks)
+        else:
+            st.write("لم يتم العثور على كلمات دالة للمهام (مثل: يجب، مطلوب، تذكير) في اليوميات.")
+            
+        st.subheader("جميع اليوميات السابقة")
+        for d in reversed(diaries):
+            with st.expander(f"يوميات بتاريخ {d['date']}"):
+                st.write(d["content"])
+    else:
+        st.write("لا توجد يوميات مسجلة لكي يتم استخراج المهام منها.")
